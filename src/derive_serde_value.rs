@@ -1,8 +1,9 @@
+use proc_macro2::TokenStream;
 use syn::DeriveInput;
-use quote::Tokens;
+use quote::ToTokens;
 use utils;
 
-pub fn impl_serde_value(ast: DeriveInput) -> Tokens {
+pub fn impl_serde_value(ast: DeriveInput) -> TokenStream {
     let name = ast.ident;
 
     let mut tokens = quote!{

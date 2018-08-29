@@ -151,30 +151,87 @@
 //! [`SerdeValue`]: https://docs.rs/slog/2.1.1/slog/trait.SerdeValue.html
 //! [`erased_serde`]: https://docs.rs/erased_serde
 
-extern crate proc_macro;
-#[macro_use]
 extern crate quote;
-extern crate syn;
+extern crate proc_macro2;
+#[macro_use]
+extern crate synstructure;
 
-mod derive_kv;
-mod derive_serde_value;
-mod utils;
+#[cfg(test)]
+extern crate slog;
 
-use proc_macro::TokenStream;
-use syn::DeriveInput;
+//mod derive_kv;
+//mod derive_serde_value;
+//mod utils;
 
-#[proc_macro_derive(KV, attributes(slog))]
-pub fn derive_kv(input: TokenStream) -> TokenStream {
-    let ast: DeriveInput = syn::parse(input).unwrap();
+use proc_macro2::TokenStream as TokenStream2;
+//use syn::DeriveInput;
 
-    let gen = derive_kv::impl_kv(ast);
-    gen.to_string().parse().unwrap()
+
+fn kv_derive(s: synstructure::Structure) -> TokenStream2 {
+    assert_eq!(s.variants().len(), 1);
+    let v = s.variants()[0];
+    println!("{:#?}", v);
+    let fields = v.fold(
+        quote!(Ok(())),
+        |acc, bi| {
+            let name = &bi.ast().ident;
+            println!("{:?}", name);
+            let string = format!("{}", quote!{ #name });
+            quote!(#acc.and(<_ as ::slog::Value>::serialize(&self.#name, rec, #string, ser))
+         )
+        }
+    );
+
+    s.gen_impl(quote! {
+        gen impl ::slog::KV for @Self {
+            fn serialize(&self, rec: &::slog::Record, ser: &mut ::slog::Serializer) -> ::slog::Result {
+                #fields
+            }
+        }
+    })
 }
 
-#[proc_macro_derive(SerdeValue, attributes(slog))]
-pub fn derive_serde_value(input: TokenStream) -> TokenStream {
-    let ast: DeriveInput = syn::parse(input).unwrap();
+decl_derive!([KV, attributes(slog)] => kv_derive);
 
-    let gen = derive_serde_value::impl_serde_value(ast);
-    gen.to_string().parse().unwrap()
+#[test]
+fn kv() {
+    test_derive! {
+        kv_derive {
+            struct Item {
+                i: i8,
+                u: u32,
+                s: String,
+            }
+        }
+
+        expands to {
+            #[allow(non_upper_case_globals)]
+            const _DERIVE_slog_KV_FOR_Item : () = {
+                impl ::slog::KV for Item {
+                    fn serialize(&self, rec: &::slog::Record, ser: &mut ::slog::Serializer) -> ::slog::Result {
+                        Ok(())
+                        .and(<_ as ::slog::Value>::serialize(&self.i, rec, "i", ser))
+                        .and(<_ as ::slog::Value>::serialize(&self.u, rec, "u", ser))
+                        .and(<_ as ::slog::Value>::serialize(&self.s, rec, "s", ser))
+                    }
+                }
+            };
+        }
+    }
 }
+
+//#[proc_macro_derive(KV, attributes(slog))]
+//pub fn derive_kv(input: TokenStream) -> TokenStream {
+//    let ast: DeriveInput = syn::parse(input).unwrap();
+//
+//    let gen = derive_kv::impl_kv(ast);
+//    gen.to_string().parse().unwrap()
+//}
+//
+//#[proc_macro_derive(SerdeValue, attributes(slog))]
+//pub fn derive_serde_value(input: TokenStream) -> TokenStream {
+//    let ast: DeriveInput = syn::parse(input).unwrap();
+//
+//    let gen = derive_serde_value::impl_serde_value(ast);
+//    gen.to_string().parse().unwrap()
+//}

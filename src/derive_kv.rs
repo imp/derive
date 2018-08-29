@@ -1,9 +1,10 @@
+use proc_macro2::TokenStream;
 use syn::{DeriveInput, Ident};
 use syn::visit;
-use quote::Tokens;
+use quote::ToTokens;
 use utils::CollectFields;
 
-pub fn impl_kv(ast: DeriveInput) -> Tokens {
+pub fn impl_kv(ast: DeriveInput) -> TokenStream {
     let name = ast.ident;
 
     let mut cf = CollectFields::default();
